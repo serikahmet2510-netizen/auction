@@ -3,69 +3,124 @@
 <head>
   <meta charset="UTF-8" />
   <title>Аукцион — Топ 7</title>
+  <script type="module">
+    // Firebase SDK
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBQpb3mSpomljZihoyOlj77a8F99Tm9IFc",
+      authDomain: "auction-top7.firebaseapp.com",
+      projectId: "auction-top7",
+      storageBucket: "auction-top7.firebasestorage.app",
+      messagingSenderId: "73096110012",
+      appId: "1:73096110012:web:8f014f6faae5d08bd455b9"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const isAdminParam = new URLSearchParams(window.location.search).get('admin') === 'true';
+    let isAdmin = false;
+
+    const ADMIN_PASSWORD = '123456'; // поменяй по желанию
+
+    // Запрашиваем пароль у админа
+    if (isAdminParam) {
+      const pass = prompt('Введите пароль администратора');
+      if (pass === ADMIN_PASSWORD) isAdmin = true;
+    }
+
+    // Ссылки на элементы
+    window.addEventListener('DOMContentLoaded', () => {
+      window.tableBody = document.getElementById('tableBody');
+      window.timeEl = document.getElementById('time');
+      window.endInput = document.getElementById('endInput');
+      window.saveBtn = document.getElementById('saveEndBtn');
+
+      if (isAdmin) document.getElementById('adminControls').style.display='block';
+
+      // Подписка на данные
+      const docRef = doc(db, 'auction', 'top7');
+
+      onSnapshot(docRef, (snapshot) => {
+        const data = snapshot.data() || {places: Array.from({length:7},(_,i)=>({place:i+1,name:''})), endTime: new Date().toISOString()};
+        window.auctionData = data;
+        renderTable();
+        if (!window.endTime) {
+          window.endTime = new Date(data.endTime);
+          if (isAdmin && endInput) endInput.value = window.endTime.toISOString().slice(0,16);
+        }
+      });
+
+      if (isAdmin && saveBtn) {
+        saveBtn.onclick = async () => {
+          const val = endInput.value;
+          if (!val) return;
+          window.endTime = new Date(val);
+          await setDoc(docRef, {places: window.auctionData.places, endTime: window.endTime.toISOString()});
+        }
+      }
+
+      setInterval(updateTimer,1000);
+    });
+
+    function renderTable(){
+      tableBody.innerHTML='';
+      window.auctionData.places.forEach((row,i)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${row.place}</td>`;
+        if (isAdmin){
+          const td=document.createElement('td');
+          const input=document.createElement('input');
+          input.value=row.name;
+          input.onchange=()=>updateName(i,input.value);
+          td.appendChild(input);
+          tr.appendChild(td);
+        } else {
+          tr.innerHTML += `<td>${row.name}</td>`;
+        }
+        tableBody.appendChild(tr);
+      });
+    }
+
+    async function updateName(i,val){
+      window.auctionData.places[i].name = val;
+      await setDoc(doc(db, 'auction', 'top7'), window.auctionData);
+    }
+
+    function updateTimer(){
+      if (!window.endTime) return;
+      const now = new Date();
+      let diff = Math.max(0, window.endTime - now);
+      const h = Math.floor(diff/36e5);
+      const m = Math.floor(diff%36e5/6e4);
+      const s = Math.floor(diff%6e4/1000);
+      timeEl.textContent = `${h}ч ${m}м ${s}с`;
+      timeEl.style.color = h<5?'red':'black';
+    }
+  </script>
   <style>
-    body { font-family: Arial, sans-serif; background:#f5f5f5; padding:30px; }
-    h1 { text-align:center; }
-    #timer { text-align:center; font-size:24px; margin-bottom:20px; }
-    table { width:60%; margin:0 auto; border-collapse:collapse; background:white; }
-    th, td { border:1px solid #ccc; padding:10px; text-align:center; }
-    th { background:#eee; }
-    .admin input { width:90%; }
+    body { font-family: Arial; background:#f5f5f5; padding:30px; }
+    h1{text-align:center;}
+    #timer{text-align:center; font-size:24px; margin-bottom:20px;}
+    table{width:60%; margin:0 auto; border-collapse:collapse; background:white;}
+    th,td{border:1px solid #ccc; padding:10px; text-align:center;}
+    th{background:#eee;}
+    .admin input{width:90%;}
+    #adminControls{margin-bottom:20px; text-align:center; display:none;}
   </style>
 </head>
 <body>
-
 <h1>ТОП – 7</h1>
 <div id="timer">До окончания аукциона: <span id="time"></span></div>
-
+<div id="adminControls">
+<label>Дата и время окончания аукциона: <input type="datetime-local" id="endInput"></label>
+<button id="saveEndBtn">Сохранить</button>
+</div>
 <table>
-  <thead>
-    <tr><th>Место</th><th>Имя</th></tr>
-  </thead>
-  <tbody id="tableBody"></tbody>
+<thead><tr><th>Место</th><th>Имя</th></tr></thead>
+<tbody id="tableBody"></tbody>
 </table>
-
-<script>
-  const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
-
-  let data = JSON.parse(localStorage.getItem('auctionData')) ||
-    Array.from({length:7}, (_,i)=>({place:i+1,name:''}));
-
-  function render(){
-    const body = document.getElementById('tableBody');
-    body.innerHTML='';
-    data.forEach((row,i)=>{
-      const tr=document.createElement('tr');
-      tr.className = isAdmin ? 'admin' : '';
-      tr.innerHTML = `<td>${row.place}</td>` +
-        `<td>${isAdmin ? `<input value="${row.name}" onchange="update(${i},this.value)">` : row.name}</td>`;
-      body.appendChild(tr);
-    });
-  }
-
-  function update(i,val){
-    data[i].name = val;
-    localStorage.setItem('auctionData', JSON.stringify(data));
-  }
-
-  // Таймер
-  const endTime = new Date(localStorage.getItem('endTime') || (()=>{
-    const d=new Date(); d.setHours(d.getHours()+24); localStorage.setItem('endTime', d); return d;
-  })());
-
-  function tick(){
-    const now = new Date();
-    let diff = Math.max(0, endTime-now);
-    const h = Math.floor(diff/36e5);
-    const m = Math.floor(diff%36e5/6e4);
-    const s = Math.floor(diff%6e4/1000);
-    const el=document.getElementById('time');
-    el.textContent = `${h}ч ${m}м ${s}с`;
-    el.style.color = h < 5 ? 'red' : 'black';
-  }
-  setInterval(tick,1000);
-
-  render(); tick();
-</script>
 </body>
 </html>
