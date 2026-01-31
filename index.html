@@ -86,10 +86,12 @@
         endTime: new Date(t).toISOString()
       });
 
-      alert(
-        "Сохранено!\nСсылка:\n" +
-        location.origin + location.pathname + "?user=" + id
-      );
+      const link =
+  location.origin + location.pathname + "?user=" + id;
+
+navigator.clipboard.writeText(link).then(() => {
+  alert("Сохранено ✅\nСсылка скопирована:\n\n" + link);
+});
     };
   </script>
 
